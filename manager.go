@@ -74,6 +74,41 @@ func NewManager(c *Config) (Manager, error) {
 			}
 		}()
 		m.wg.Wait()
+	case BothRolling:
+		// regist the tigger and start cron
+		if err := m.cr.AddFunc(c.RollingTimePattern, func() {
+			m.fire <- m.GenLogFileName(c)
+		}); err != nil {
+			return nil, err
+		}
+		m.cr.Start()
+		// regist the tigger and start goroutine
+		m.ParseVolume(c)
+		m.wg.Add(1)
+		go func() {
+			timer := time.Tick(time.Duration(Precision) * time.Second)
+			filepath := LogFilePath(c)
+			m.wg.Done()
+			for {
+				select {
+				case <-m.context:
+					// on close, exit
+					return
+				case <-timer:
+					file, err := os.Open(filepath)
+					if err != nil {
+						// SHOULD NOT HAPPEN
+						log.Println("error in open file", err)
+					}
+					if info, err := file.Stat(); err == nil {
+						if info.Size() > m.thresholdSize {
+							m.fire <- m.GenLogFileName(c)
+						}
+					}
+				}
+			}
+		}()
+		m.wg.Wait()
 	}
 	return m, nil
 }

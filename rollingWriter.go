@@ -12,6 +12,7 @@ const (
 	WithoutRolling = iota
 	TimeRolling
 	VolumeRolling
+	BothRolling
 )
 
 var (
